@@ -18,15 +18,16 @@ When the user says things like:
 Submit the answer/proposal being discussed with:
 
 ```bash
-xreview submit \
-  --target <target> \
-  --source codex \
-  --subject "<answer or selected text>" \
-  --goal "<user's review goal>" \
-  --guide "<user's review guide>"
+xreview review --source codex "<answer or selected text>"
 ```
 
-If the text is long, write it to a temporary file and use `--subject-file`.
+By default, Codex submissions target Claude. Override with `--target <target>` only when the user asks for a different reviewer.
+
+If the text is long, write it to a temporary file and use:
+
+```bash
+xreview review --source codex --subject-file /tmp/xreview-subject.md
+```
 
 ## Retrieve Feedback
 
@@ -45,4 +46,3 @@ When feedback is available, summarize:
 - Open questions
 
 Do not blindly apply reviewer feedback. Explain tradeoffs.
-

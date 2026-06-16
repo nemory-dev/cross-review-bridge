@@ -71,22 +71,23 @@ Restart existing Codex or Claude Code sessions after adding new MCP servers, ski
 
 There are two ways to submit text for review:
 
-1. Put short text directly in the command with `--subject`.
+1. Put short text directly in the command.
 2. Put long text in a file and pass the file path with `--subject-file`.
 
-If you are not comfortable with temporary files yet, start with `--subject`.
+If you are not comfortable with temporary files yet, start with `xreview review "..."`.
 
 ### Option A: No Extra Files
 
 Submit a short review request from the source tool:
 
 ```bash
-xreview submit \
-  --target claude \
-  --source codex \
-  --subject "Here is the answer or plan I want reviewed." \
-  --goal "Review architecture risks" \
-  --guide "Focus on failure cases, over-engineering, and future Antigravity support."
+xreview review "Here is the answer or plan I want reviewed."
+```
+
+By default, Codex submissions target Claude. Claude submissions can target Codex by setting the source:
+
+```bash
+xreview review --source claude "Here is the answer or plan I want reviewed."
 ```
 
 Claim it from the reviewer tool:
@@ -115,11 +116,8 @@ For long answers, it is easier to save the answer in a file first:
 
 ```bash
 xreview submit \
-  --target claude \
   --source codex \
-  --subject-file answer.md \
-  --goal "Review architecture risks" \
-  --guide "Focus on failure cases, over-engineering, and future Antigravity support."
+  --subject-file answer.md
 ```
 
 Then claim it from the reviewer tool:
@@ -224,7 +222,7 @@ This lets the reviewer see project-specific instructions without copying the who
 Use `--cwd` to override the context directory:
 
 ```bash
-xreview submit --cwd /path/to/project --target claude --subject-file answer.md
+xreview submit --cwd /path/to/project --source codex --subject-file answer.md
 ```
 
 ## Storage

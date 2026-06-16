@@ -19,16 +19,18 @@ async function main(argv) {
   const storePath = options.store || defaultStorePath();
 
   switch (command) {
+    case 'review':
     case 'submit': {
+      const source = options.source || 'codex';
       const subject = await readSubject(options);
       const project = await collectProjectContext({ cwd: options.cwd || process.cwd() });
       const review = await createReview({
         storePath,
-        target: requireOption(options, 'target'),
-        source: options.source || 'unknown',
+        target: options.target || defaultTargetForSource(source),
+        source,
         subject,
-        reviewGoal: options.goal || '',
-        reviewGuide: options.guide || '',
+        reviewGoal: options.goal || defaultReviewGoal(command),
+        reviewGuide: options.guide || defaultReviewGuide(command),
         project
       });
       printJson(review);
@@ -136,6 +138,7 @@ async function readSubject(options) {
   if (options['subject-file']) {
     return readFile(options['subject-file'], 'utf8');
   }
+  if (options._.length) return options._.join(' ');
   throw new Error('Missing required option: --subject or --subject-file');
 }
 
@@ -170,10 +173,30 @@ function requireOption(options, name) {
   return options[name];
 }
 
+function defaultTargetForSource(source) {
+  if (source === 'claude') return 'codex';
+  if (source === 'codex') return 'claude';
+  return 'claude';
+}
+
+function defaultReviewGoal(command) {
+  if (command === 'review') return 'Critically review this answer or plan.';
+  return '';
+}
+
+function defaultReviewGuide(command) {
+  if (command === 'review') {
+    return 'Focus on correctness, missing assumptions, risks, and actionable improvements.';
+  }
+  return '';
+}
+
 function printHelp() {
   process.stdout.write(`cross-review-bridge CLI
 
 Usage:
+  xreview review "text" [--source codex|claude] [--target claude|codex]
+  xreview submit "text" [--source codex|claude] [--target claude|codex]
   xreview submit --target claude --subject "text" [--goal "..."] [--guide "..."]
   xreview submit --target claude --subject-file answer.md
   xreview pending [--target claude]
@@ -186,6 +209,8 @@ Usage:
 Options:
   --store <path>          Override review store path.
   --cwd <path>            Project cwd used for context collection.
+  --source <name>         Source host. Defaults to codex.
+  --target <name>         Reviewer host. Defaults to claude for codex, codex for claude.
 `);
 }
 

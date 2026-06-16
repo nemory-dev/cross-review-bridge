@@ -57,10 +57,78 @@ test('CLI submits and claims a review request', async () => {
   }
 });
 
+test('CLI submit accepts positional subject and defaults codex reviews to claude', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'xreview-cli-'));
+  const storePath = path.join(dir, 'reviews.json');
+
+  try {
+    const submit = runCli([
+      'submit',
+      'Review this implementation plan.',
+      '--store',
+      storePath
+    ]);
+
+    assert.equal(submit.status, 0, submit.stderr);
+    const submitted = JSON.parse(submit.stdout);
+    assert.equal(submitted.source, 'codex');
+    assert.equal(submitted.target, 'claude');
+    assert.equal(submitted.subject, 'Review this implementation plan.');
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('CLI submit defaults claude reviews to codex when source is claude', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'xreview-cli-'));
+  const storePath = path.join(dir, 'reviews.json');
+
+  try {
+    const submit = runCli([
+      'submit',
+      'Check this Claude plan.',
+      '--store',
+      storePath,
+      '--source',
+      'claude'
+    ]);
+
+    assert.equal(submit.status, 0, submit.stderr);
+    const submitted = JSON.parse(submit.stdout);
+    assert.equal(submitted.source, 'claude');
+    assert.equal(submitted.target, 'codex');
+    assert.equal(submitted.subject, 'Check this Claude plan.');
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('CLI review alias submits with review defaults', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'xreview-cli-'));
+  const storePath = path.join(dir, 'reviews.json');
+
+  try {
+    const submit = runCli([
+      'review',
+      'Natural language review request.',
+      '--store',
+      storePath
+    ]);
+
+    assert.equal(submit.status, 0, submit.stderr);
+    const submitted = JSON.parse(submit.stdout);
+    assert.equal(submitted.source, 'codex');
+    assert.equal(submitted.target, 'claude');
+    assert.equal(submitted.reviewGoal, 'Critically review this answer or plan.');
+    assert.match(submitted.reviewGuide, /correctness/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 function runCli(args) {
   return spawnSync(process.execPath, [CLI, ...args], {
     cwd: path.resolve('.'),
     encoding: 'utf8'
   });
 }
-

@@ -5,13 +5,12 @@ argument-hint: "[target] [goal/guide]"
 
 Use the `xreview` CLI to submit the relevant answer, plan, or proposal to Cross Review Bridge.
 
-Ask for the target if missing. Use `claude`, `codex`, `antigravity`, or another explicit target.
+By default, Claude submissions target Codex. Ask for a target only if the user wants a reviewer other than Codex.
 
 Prefer:
 
 ```bash
-xreview submit --target "$TARGET" --source claude --subject-file /tmp/xreview-subject.md --goal "$GOAL" --guide "$GUIDE"
+xreview review --source claude --subject-file /tmp/xreview-subject.md
 ```
 
 Return the created review ID and tell the user which target should claim it.
-

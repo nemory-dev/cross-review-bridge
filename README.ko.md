@@ -86,24 +86,25 @@ cp integrations/claude/agents/*.md ~/.claude/agents/
 
 ## 가장 쉬운 사용법
 
-리뷰할 내용이 짧으면 파일을 만들 필요 없이 명령에 바로 넣을 수 있습니다.
+리뷰할 내용이 짧으면 자연어 문장을 그대로 넘기면 됩니다. Codex에서 요청하면 기본으로 Claude에게 보내고, Claude에서 `--source claude`로 요청하면 기본으로 Codex에게 보냅니다.
 
 ```bash
-xreview submit \
-  --target claude \
-  --source codex \
-  --subject "리뷰받고 싶은 답변이나 계획 내용" \
-  --goal "설계 타당성 검토" \
-  --guide "실패 케이스, 과한 추상화, 보안/비용 리스크 중심으로 봐줘."
+xreview review "리뷰받고 싶은 답변이나 계획 내용"
 ```
 
-각 옵션의 의미는 다음과 같습니다.
+Claude에서 Codex로 보내려면:
 
-- `--target claude`: Claude가 리뷰할 요청이라는 뜻입니다.
-- `--source codex`: Codex에서 만든 요청이라는 뜻입니다.
-- `--subject`: 리뷰받을 실제 내용입니다.
-- `--goal`: 리뷰 목적입니다.
-- `--guide`: 리뷰할 때 특히 봐야 할 기준입니다.
+```bash
+xreview review --source claude "리뷰받고 싶은 답변이나 계획 내용"
+```
+
+필요할 때만 옵션을 추가합니다.
+
+- `--source codex`: Codex에서 만든 요청입니다. 생략하면 기본값입니다.
+- `--source claude`: Claude에서 만든 요청입니다. 기본 리뷰 대상이 Codex가 됩니다.
+- `--target <name>`: 기본 리뷰 대상을 덮어씁니다.
+- `--goal`: 리뷰 목적을 직접 지정합니다.
+- `--guide`: 리뷰할 때 특히 봐야 할 기준을 직접 지정합니다.
 
 Claude Code 쪽에서는 다음 명령으로 리뷰 요청을 가져옵니다.
 
@@ -133,11 +134,8 @@ AI 답변이 길면 명령에 직접 넣기 어렵습니다. 이때는 답변을
 
 ```bash
 xreview submit \
-  --target claude \
   --source codex \
-  --subject-file answer.md \
-  --goal "아키텍처 리스크 검토" \
-  --guide "운영 관점, 실패 복구, 확장성 중심으로 봐줘."
+  --subject-file answer.md
 ```
 
 리뷰 결과가 길면 `feedback.md`라는 파일에 저장한 뒤:
@@ -192,7 +190,6 @@ rm answer.md feedback.md
 ```bash
 xreview submit \
   --cwd /path/to/project \
-  --target claude \
   --source codex \
   --subject-file answer.md \
   --goal "프로젝트 지침에 맞는지 검토"
@@ -219,6 +216,18 @@ xreview pending --store /tmp/reviews.json
 ```
 
 ## 자주 쓰는 명령
+
+Codex에서 Claude로 리뷰 요청 보내기:
+
+```bash
+xreview review "리뷰받고 싶은 답변이나 계획"
+```
+
+Claude에서 Codex로 리뷰 요청 보내기:
+
+```bash
+xreview review --source claude "리뷰받고 싶은 답변이나 계획"
+```
 
 대기 중인 리뷰 보기:
 
@@ -362,4 +371,3 @@ npm run check
 - 앱 로그인 토큰 접근 없음
 - 로컬 저장 우선
 - 프로젝트 맥락은 제한적으로만 수집
-
