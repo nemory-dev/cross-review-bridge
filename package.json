@@ -1,0 +1,26 @@
+{
+  "name": "cross-review-bridge",
+  "version": "0.1.0",
+  "description": "Local MCP and CLI bridge for cross-reviewing AI assistant answers across Codex, Claude Code, Antigravity, and future tools.",
+  "type": "module",
+  "bin": {
+    "xreview": "./src/cli.js",
+    "cross-review-bridge": "./src/mcp-server.js"
+  },
+  "scripts": {
+    "test": "node --test",
+    "check": "node --check src/*.js && node --check test/*.js"
+  },
+  "keywords": [
+    "mcp",
+    "codex",
+    "claude-code",
+    "cross-review",
+    "ai-agents"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  }
+}
+
