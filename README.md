@@ -40,6 +40,31 @@ After `npm link`, the CLI is available as:
 xreview --help
 ```
 
+## Register With Codex And Claude Code
+
+Register the MCP server with Codex:
+
+```bash
+codex mcp add cross-review-bridge -- node /absolute/path/to/cross-review-bridge/src/mcp-server.js
+```
+
+Register the MCP server with Claude Code for all projects:
+
+```bash
+claude mcp add --scope user cross-review-bridge -- node /absolute/path/to/cross-review-bridge/src/mcp-server.js
+```
+
+Install optional Codex and Claude helper templates:
+
+```bash
+mkdir -p ~/.codex/skills/cross-review ~/.claude/commands ~/.claude/agents
+cp integrations/codex/SKILL.md ~/.codex/skills/cross-review/SKILL.md
+cp integrations/claude/commands/*.md ~/.claude/commands/
+cp integrations/claude/agents/*.md ~/.claude/agents/
+```
+
+Restart existing Codex or Claude Code sessions after adding new MCP servers, skills, commands, or agents.
+
 ## Quick Start
 
 Submit a review request from the source tool:
@@ -204,4 +229,3 @@ npm run check
 ```
 
 This project intentionally starts with zero runtime dependencies. If an official MCP SDK dependency is added later, keep the no-API-call-by-default security model.
-
