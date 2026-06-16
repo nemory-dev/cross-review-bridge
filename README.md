@@ -1,5 +1,7 @@
 # Cross Review Bridge
 
+Korean guide: [README.ko.md](README.ko.md)
+
 Local MCP and CLI bridge for cross-reviewing AI assistant answers across Codex, Claude Code, Antigravity, Gemini, and future AI tools.
 
 The bridge does **not** call OpenAI, Anthropic, Google, or any model API by default. It stores review requests locally so each AI host can perform the review with its own logged-in app/session/subscription.
