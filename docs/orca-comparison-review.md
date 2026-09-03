@@ -253,7 +253,25 @@ st.run('codex',  'r1').changes   // 0
 | `better-sqlite3` | 성숙도·검증 폭 | 네이티브 의존성 추가(zero-dependency 원칙 폐기), Windows 빌드 툴체인, 그래도 `>=22` 필요 |
 | JSON + cross-process lock/CAS | Node 20 호환 유지 | stale lock 처리가 결국 lease 문제를 재귀적으로 불러옴 → "단순해서 JSON" 이라는 이점 자체가 소멸 |
 
-로컬 단일 파일 저장소에서 RC API 변경 리스크는 네이티브 의존성 비용보다 작다. 다만 **이는 권고이며, Node 20 지원 필요 여부는 프로젝트 소유자의 결정 사항이다.** Step 2에서 ADR로 확정한다.
+로컬 단일 파일 저장소에서 RC API 변경 리스크는 네이티브 의존성 비용보다 작다.
+
+### D4. [결정됨 2026-09-03] Node 20 지원 불필요 → `node:sqlite` 채택
+
+프로젝트 소유자 확인 결과 **이 프로젝트는 소유자 본인 사용을 위한 도구이며 Node 버전 상향에 제약이 없다.** 이로써 D1의 선행 질문이 해소되고 Step 2 ADR이 확정된다.
+
+| 항목 | 결정 |
+| :--- | :--- |
+| Node 20 지원 | **불필요** (2026-04-30 EOL, 유지할 이유 없음) |
+| 저장소 | **`node:sqlite`** (D2에서 이 머신 동작 검증 완료) |
+| `engines` | `>=24`로 상향. Step 3에서 `package.json`과 함께 반영 |
+| 런타임 의존성 | **0개 유지** — zero-dependency 원칙은 그대로 지켜진다 |
+| 남은 리스크 | `node:sqlite` Stability 1.2 (RC). 로컬 단일 파일 저장소 범위에서 수용 |
+
+이 결정의 파급 효과:
+
+- **E3의 이견이 해소된다.** `unique temp + Windows retry`는 작성하지 않는다. 폐기될 코드이자 프로세스 간 EPERM을 고치지 못하는 코드였다(C1).
+- **B1·C1이 Step 3에서 함께 닫힌다.** 조건부 `UPDATE ... WHERE status='pending'`의 `changes` 카운트가 원자적 claim을 제공하고, rename 경합 자체가 사라진다.
+- Step 1은 저장소와 무관하므로 결정과 독립적으로 선행 가능하다.
 
 ---
 
@@ -347,8 +365,12 @@ const r = await claimReview({ storePath: sp, target: 'claude', reviewer: who });
 
 ---
 
-## H. 미해결 결정 사항
+## H. 결정 사항
 
-1. **Node 20 지원 여부** — Step 2 ADR의 선행 질문. 이 답이 저장소 선택을 결정한다. 프로젝트 소유자 결정 사항.
-2. **`node:sqlite` RC 수용 여부** — Stability 1.2를 로컬 개인 도구에서 수용할 것인가, 아니면 성숙도를 우선해 `better-sqlite3`의 네이티브 의존성을 받을 것인가.
-3. **E3의 ADR 위치** — 유일하게 남은 이견. Step 1에서 `unique temp + retry`를 쓸 것인가(Codex 안), ADR을 앞당겨 생략할 것인가(본 검토 안).
+| # | 항목 | 상태 |
+| :--- | :--- | :--- |
+| 1 | **Node 20 지원 여부** | **해소됨** (2026-09-03) — 불필요. D4 참조 |
+| 2 | **`node:sqlite` RC 수용 여부** | **해소됨** — 수용. 로컬 단일 파일 저장소 범위에서 네이티브 의존성 비용보다 작다고 판단 |
+| 3 | **E3의 ADR 위치** | **해소됨** — ADR이 선행 확정되었으므로 `unique temp + retry`는 작성하지 않는다 |
+
+미해결 사항 없음. Step 1 착수 가능.
