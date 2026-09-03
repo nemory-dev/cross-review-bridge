@@ -10,7 +10,8 @@ import {
   createReview,
   defaultStorePath,
   getReview,
-  listReviews
+  listReviews,
+  normalizeReviewType
 } from './store.js';
 
 async function main(argv) {
@@ -24,13 +25,23 @@ async function main(argv) {
       const source = options.source || 'codex';
       const subject = await readSubject(options);
       const project = await collectProjectContext({ cwd: options.cwd || process.cwd() });
+      const reviewType = parseReviewType(options.type);
+      const proposedPlanFile = options['plan-file'] || options.planFile || '';
+      const contextDocuments = collectArrayOption(options, ['context-docs', 'context-doc', 'contextDocs']);
+      const reviewQuestions = collectArrayOption(options, ['question', 'questions']);
+
+      const hasExplicitType = Boolean(options.type);
       const review = await createReview({
         storePath,
         target: options.target || defaultTargetForSource(source),
         source,
         subject,
-        reviewGoal: options.goal || defaultReviewGoal(command),
-        reviewGuide: options.guide || defaultReviewGuide(command),
+        reviewType,
+        reviewGoal: options.goal || (hasExplicitType ? '' : defaultReviewGoal(command)),
+        reviewGuide: options.guide || (hasExplicitType ? '' : defaultReviewGuide(command)),
+        proposedPlanFile,
+        contextDocuments,
+        reviewQuestions,
         project
       });
       printJson(review);
@@ -123,14 +134,47 @@ function parseArgs(args) {
 
     const key = arg.slice(2);
     const next = args[index + 1];
+    let val;
     if (next === undefined || next.startsWith('--')) {
-      options[key] = true;
+      val = true;
     } else {
-      options[key] = next;
+      val = next;
       index += 1;
+    }
+
+    if (options[key] !== undefined) {
+      if (Array.isArray(options[key])) {
+        options[key].push(val);
+      } else {
+        options[key] = [options[key], val];
+      }
+    } else {
+      options[key] = val;
     }
   }
   return options;
+}
+
+function parseReviewType(typeOpt) {
+  return normalizeReviewType(typeOpt);
+}
+
+function collectArrayOption(options, keys) {
+  const result = [];
+  for (const key of keys) {
+    const val = options[key];
+    if (!val) continue;
+    if (Array.isArray(val)) {
+      result.push(...val);
+    } else if (typeof val === 'string') {
+      if (val.includes(',')) {
+        result.push(...val.split(',').map((s) => s.trim()).filter(Boolean));
+      } else {
+        result.push(val);
+      }
+    }
+  }
+  return result;
 }
 
 async function readSubject(options) {
@@ -195,9 +239,9 @@ function printHelp() {
   process.stdout.write(`cross-review-bridge CLI
 
 Usage:
-  xreview review "text" [--source codex|claude] [--target claude|codex]
-  xreview submit "text" [--source codex|claude] [--target claude|codex]
-  xreview submit --target claude --subject "text" [--goal "..."] [--guide "..."]
+  xreview review "text" [--type plan|code|general] [--source codex|claude] [--target claude|codex]
+  xreview submit "text" [--type plan|code|general] [--source codex|claude] [--target claude|codex]
+  xreview submit --target claude --type plan --subject "text" [--plan-file plan.md] [--question "q1"] [--question "q2"]
   xreview submit --target claude --subject-file answer.md
   xreview pending [--target claude]
   xreview claim --target claude --reviewer claude-code [--format prompt]
@@ -209,6 +253,10 @@ Usage:
 Options:
   --store <path>          Override review store path.
   --cwd <path>            Project cwd used for context collection.
+  --type <type>           Review type: plan (PLAN_AND_PROPOSAL), code (CODE_DIFF), general. Defaults to plan.
+  --plan-file <path>      Path to proposed plan file.
+  --context-docs <paths>  Paths to context/ADR files (comma-separated or multiple flags).
+  --question <q>          Specific review questions for reviewer (can be specified multiple times).
   --source <name>         Source host. Defaults to codex.
   --target <name>         Reviewer host. Defaults to claude for codex, codex for claude.
 `);

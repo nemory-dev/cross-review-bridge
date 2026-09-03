@@ -1,10 +1,86 @@
 import { existsSync } from 'node:fs';
-import { readdir, readFile, stat } from 'node:fs/promises';
+import { readdir, readFile, realpath, stat } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 
 const ROOT_MARKERS = ['.git', 'AGENTS.md', 'CLAUDE.md', 'GEMINI.md', 'package.json'];
 const ROOT_INSTRUCTION_FILES = ['AGENTS.md', 'CLAUDE.md', 'GEMINI.md'];
+
+export function toPosixPath(filePath) {
+  return filePath ? filePath.replace(/\\/g, '/') : '';
+}
+
+export async function readContextDocument(root, inputPath, maxChars = 12000) {
+  if (!inputPath || typeof inputPath !== 'string' || !inputPath.trim()) {
+    return null;
+  }
+
+  const nativeRoot = path.resolve(root || process.cwd());
+  const nativePath = path.resolve(nativeRoot, inputPath.trim());
+  const relativePath = path.relative(nativeRoot, nativePath);
+  const displayPath = toPosixPath(relativePath || path.basename(nativePath));
+
+  const isInside = nativePath === nativeRoot || nativePath.startsWith(nativeRoot + path.sep);
+  if (!isInside) {
+    return {
+      path: displayPath,
+      nativePath,
+      content: null,
+      truncated: false,
+      error: `Access denied: Path "${displayPath}" is outside project root.`
+    };
+  }
+
+  if (!(await isFile(nativePath))) {
+    return {
+      path: displayPath,
+      nativePath,
+      content: null,
+      truncated: false,
+      error: `File not found or unreadable: "${displayPath}".`
+    };
+  }
+
+  try {
+    let realRoot = nativeRoot;
+    let realPath = nativePath;
+    try {
+      realRoot = await realpath(nativeRoot);
+      realPath = await realpath(nativePath);
+    } catch {
+      // Fallback if realpath fails
+    }
+
+    const isInsideReal = realPath === realRoot || realPath.startsWith(realRoot + path.sep);
+    if (!isInsideReal) {
+      return {
+        path: displayPath,
+        nativePath,
+        content: null,
+        truncated: false,
+        error: `Access denied: Symlink target "${displayPath}" points outside project root.`
+      };
+    }
+
+    const raw = await readFile(nativePath, 'utf8');
+    const content = raw.slice(0, maxChars);
+    return {
+      path: displayPath,
+      nativePath,
+      content,
+      truncated: raw.length > content.length,
+      error: null
+    };
+  } catch (error) {
+    return {
+      path: displayPath,
+      nativePath,
+      content: null,
+      truncated: false,
+      error: `Failed to read file "${displayPath}": ${error.message}`
+    };
+  }
+}
 
 export async function findProjectRoot(startCwd = process.cwd()) {
   let current = path.resolve(startCwd);
@@ -31,8 +107,8 @@ export async function collectProjectContext({
   const instructions = await collectInstructions(root, maxInstructionChars);
 
   return {
-    root,
-    cwd: resolvedCwd,
+    root: toPosixPath(root),
+    cwd: toPosixPath(resolvedCwd),
     instructions,
     git: collectGitSummary(root)
   };
@@ -58,7 +134,7 @@ async function collectInstructions(root, maxInstructionChars) {
   if (await exists(cursorRulesDir)) {
     for (const entry of await readdir(cursorRulesDir)) {
       if (entry.endsWith('.md') || entry.endsWith('.mdc')) {
-        files.push(path.join('.cursor', 'rules', entry));
+        files.push(toPosixPath(path.join('.cursor', 'rules', entry)));
       }
     }
   }
@@ -76,7 +152,7 @@ async function collectInstructions(root, maxInstructionChars) {
     const content = raw.slice(0, remaining);
     remaining -= content.length;
     results.push({
-      path: relativePath,
+      path: toPosixPath(relativePath),
       content,
       truncated: raw.length > content.length
     });
@@ -126,3 +202,4 @@ async function isFile(filePath) {
 function existsSyncSafe(filePath) {
   return existsSync(filePath);
 }
+

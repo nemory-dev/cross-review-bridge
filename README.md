@@ -134,6 +134,30 @@ xreview complete <review-id> \
   --result-file feedback.md
 ```
 
+### Option C: Review Types & Advanced Options (Plan & Proposal Review)
+
+You can specify the review type (`plan` for `PLAN_AND_PROPOSAL`, `code` for `CODE_DIFF`, `general`), include proposed plan files, context/ADR documents, and specific review questions:
+
+```bash
+# Submit a technical plan or architecture proposal for cross-review (Plan Critic & Red Teaming)
+xreview submit \
+  --type plan \
+  --target claude \
+  --subject "Budget Reservation Architecture Proposal" \
+  --plan-file docs/architecture_plan.md \
+  --context-docs docs/adr-001.md,docs/spec.md \
+  --question "Does this conflict with existing token reservation?" \
+  --question "Are there unhandled rollback/settlement edge cases?"
+
+# Submit a code diff for spec & contract validation
+xreview submit \
+  --type code \
+  --target codex \
+  --subject-file diff.patch
+```
+
+When `--plan-file` or `--context-docs` are specified, `cross-review-bridge` automatically captures their actual file content (with root boundary checks and max character limits) and embeds them directly into the markdown review prompt.
+
 Back in the original tool:
 
 ```bash

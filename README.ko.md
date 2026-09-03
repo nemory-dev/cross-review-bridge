@@ -146,6 +146,30 @@ xreview complete <review-id> \
   --result-file feedback.md
 ```
 
+## 리뷰 유형 및 고급 옵션 (계획 및 제안 리뷰)
+
+리뷰 유형(`--type plan`, `--type code`, `--type general`), 검토 대상 계획 문서(`--plan-file`), 관련 맥락/ADR 문서(`--context-docs`), 집중 검토 질문(`--question`)을 지정하여 정교한 교차 리뷰를 수행할 수 있습니다.
+
+```bash
+# AI가 세운 기술 계획 및 아키텍처 제안 교차 리뷰 (Plan Critic & Red Teaming)
+xreview submit \
+  --type plan \
+  --target claude \
+  --subject "예산 사전예약 아키텍처 제안" \
+  --plan-file docs/MASTER_PLAN.md \
+  --context-docs docs/decisions.md \
+  --question "기존 토큰 reservation과 충돌하는가?" \
+  --question "롤백 정산 누락 케이스가 있는가?"
+
+# 코드 변경 사항(Diff) 스펙 및 계약 검증 리뷰
+xreview submit \
+  --type code \
+  --target codex \
+  --subject-file diff.patch
+```
+
+`--plan-file` 및 `--context-docs`로 지정된 파일은 `cross-review-bridge`가 프로젝트 루트 보안 범위(Path Traversal 방지) 및 최대 글자 수 내에서 파일의 **실제 내용(content)**을 읽어와 리뷰 프롬프트의 코드 블록으로 포함시킵니다.
+
 ## answer.md와 feedback.md에 대한 중요한 설명
 
 `answer.md`와 `feedback.md`는 예시 파일명일 뿐입니다.

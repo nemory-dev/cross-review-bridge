@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
-import { collectProjectContext, findProjectRoot } from '../src/context.js';
+import { collectProjectContext, findProjectRoot, toPosixPath } from '../src/context.js';
 
 test('findProjectRoot walks up to git or instruction files', async () => {
   const dir = await mkdtemp(path.join(tmpdir(), 'xreview-context-'));
@@ -15,7 +15,7 @@ test('findProjectRoot walks up to git or instruction files', async () => {
     await mkdir(path.join(dir, '.git'));
 
     const root = await findProjectRoot(nested);
-    assert.equal(root, dir);
+    assert.equal(toPosixPath(root), toPosixPath(dir));
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
@@ -34,8 +34,8 @@ test('collectProjectContext captures bounded project instructions', async () => 
 
     const context = await collectProjectContext({ cwd: nested, maxInstructionChars: 2000 });
 
-    assert.equal(context.root, dir);
-    assert.equal(context.cwd, nested);
+    assert.equal(context.root, toPosixPath(dir));
+    assert.equal(context.cwd, toPosixPath(nested));
     assert.deepEqual(
       context.instructions.map((item) => item.path).sort(),
       ['.cursor/rules/review.md', 'AGENTS.md', 'CLAUDE.md']
@@ -45,4 +45,5 @@ test('collectProjectContext captures bounded project instructions', async () => 
     await rm(dir, { recursive: true, force: true });
   }
 });
+
 

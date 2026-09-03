@@ -3,7 +3,27 @@ import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import path from 'node:path';
 
+import { readContextDocument, toPosixPath } from './context.js';
+
 const VALID_STATUSES = new Set(['pending', 'claimed', 'completed', 'cancelled']);
+export const VALID_REVIEW_TYPES = new Set(['PLAN_AND_PROPOSAL', 'CODE_DIFF', 'GENERAL']);
+
+export function normalizeReviewType(typeOpt) {
+  if (!typeOpt || typeof typeOpt !== 'string') return 'PLAN_AND_PROPOSAL';
+  const upper = typeOpt.trim().toUpperCase();
+  const lower = typeOpt.trim().toLowerCase();
+
+  if (lower === 'plan' || lower === 'proposal' || lower === 'plan_and_proposal') return 'PLAN_AND_PROPOSAL';
+  if (lower === 'code' || lower === 'diff' || lower === 'code_diff') return 'CODE_DIFF';
+  if (lower === 'general') return 'GENERAL';
+
+  if (VALID_REVIEW_TYPES.has(upper)) {
+    return upper;
+  }
+  throw new Error(`Invalid reviewType: "${typeOpt}". Allowed values: ${Array.from(VALID_REVIEW_TYPES).join(', ')}`);
+}
+
+export const MAX_TOTAL_CONTEXT_CHARS = 36000;
 
 export function defaultStorePath() {
   const base = process.env.CROSS_REVIEW_HOME || path.join(homedir(), '.cross-review-bridge');
@@ -15,13 +35,53 @@ export async function createReview({
   target,
   source = 'unknown',
   subject,
+  reviewType = 'PLAN_AND_PROPOSAL',
   reviewGoal = '',
   reviewGuide = '',
+  proposedPlanFile = '',
+  contextDocuments = [],
+  reviewQuestions = [],
   project = null,
   metadata = {}
 }) {
   requireText(target, 'target');
   requireText(subject, 'subject');
+
+  const validReviewType = normalizeReviewType(reviewType);
+  const projectRoot = project?.root || process.cwd();
+  let remainingBudget = MAX_TOTAL_CONTEXT_CHARS;
+
+  let proposedPlanDoc = null;
+  if (proposedPlanFile) {
+    proposedPlanDoc = await readContextDocument(projectRoot, proposedPlanFile, Math.min(12000, remainingBudget));
+    if (proposedPlanDoc?.content) {
+      remainingBudget = Math.max(0, remainingBudget - proposedPlanDoc.content.length);
+    }
+  }
+
+  const contextDocs = [];
+  if (Array.isArray(contextDocuments)) {
+    for (const docPath of contextDocuments) {
+      if (remainingBudget <= 0) {
+        const display = toPosixPath(docPath);
+        contextDocs.push({
+          path: display,
+          nativePath: path.resolve(projectRoot, docPath),
+          content: null,
+          truncated: true,
+          error: `Omitted: Total context size budget (${MAX_TOTAL_CONTEXT_CHARS} chars) exceeded.`
+        });
+        continue;
+      }
+      const doc = await readContextDocument(projectRoot, docPath, Math.min(12000, remainingBudget));
+      if (doc) {
+        contextDocs.push(doc);
+        if (doc.content) {
+          remainingBudget = Math.max(0, remainingBudget - doc.content.length);
+        }
+      }
+    }
+  }
 
   const now = new Date().toISOString();
   const review = {
@@ -30,8 +90,14 @@ export async function createReview({
     target,
     source,
     subject,
+    reviewType: validReviewType,
     reviewGoal,
     reviewGuide,
+    proposedPlanFile: proposedPlanDoc?.path || toPosixPath(proposedPlanFile),
+    proposedPlanDoc,
+    contextDocuments: contextDocs.length > 0 ? contextDocs.map((d) => d.path) : (Array.isArray(contextDocuments) ? contextDocuments.map(toPosixPath) : []),
+    contextDocs,
+    reviewQuestions: Array.isArray(reviewQuestions) ? reviewQuestions : [],
     project,
     metadata,
     createdAt: now,

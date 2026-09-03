@@ -25,8 +25,16 @@ const tools = [
         target: { type: 'string', description: 'Reviewer target, e.g. claude, codex, antigravity.' },
         source: { type: 'string', description: 'Source host, e.g. codex or claude.' },
         subject: { type: 'string', description: 'The answer, plan, or proposal to review.' },
+        reviewType: {
+          type: 'string',
+          enum: ['PLAN_AND_PROPOSAL', 'CODE_DIFF', 'GENERAL'],
+          description: 'Review type: PLAN_AND_PROPOSAL, CODE_DIFF, or GENERAL.'
+        },
         reviewGoal: { type: 'string' },
         reviewGuide: { type: 'string' },
+        proposedPlanFile: { type: 'string', description: 'Path to proposed plan document file.' },
+        contextDocuments: { type: 'array', items: { type: 'string' }, description: 'Paths to additional context/ADR files.' },
+        reviewQuestions: { type: 'array', items: { type: 'string' }, description: 'Specific questions to review.' },
         cwd: { type: 'string', description: 'Project cwd for instruction/context discovery.' }
       }
     }
@@ -173,8 +181,12 @@ async function callTool(name, args) {
         target: args.target,
         source: args.source || 'unknown',
         subject: args.subject,
+        reviewType: args.reviewType || 'PLAN_AND_PROPOSAL',
         reviewGoal: args.reviewGoal || '',
         reviewGuide: args.reviewGuide || '',
+        proposedPlanFile: args.proposedPlanFile || '',
+        contextDocuments: args.contextDocuments || [],
+        reviewQuestions: args.reviewQuestions || [],
         project
       });
       return textResult(JSON.stringify(review, null, 2));
