@@ -1,10 +1,11 @@
-// Step 0 regression tests: concurrency defects pinned before they are fixed.
+// Regression tests for concurrency defects.
 //
-// These assert the DESIRED behavior, which the current implementation does not
-// provide. They are marked `todo` so the suite stays green while the defects are
-// documented. Remove `todo: true` in Step 1/Step 3 as each defect is fixed.
+// The MCP serialization test passes as of Step 1. The remaining three assert the
+// DESIRED behavior of the store itself, which needs cross-process atomicity the
+// JSON backend cannot provide; they stay `todo` until the node:sqlite migration
+// in Step 3 and are the acceptance criteria for it.
 //
-// Reference: docs/orca-comparison-review.md sections B1 and C1.
+// Reference: docs/orca-comparison-review.md sections B1, C1, and D4.
 
 import assert from 'node:assert/strict';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
@@ -17,6 +18,67 @@ import test from 'node:test';
 import { claimReview, createReview, listReviews } from '../src/store.js';
 
 const STORE_URL = pathToFileURL(path.resolve('src/store.js')).href;
+const SERVER = path.resolve('src/mcp-server.js');
+
+// B1, request layer: two claim_review calls delivered in one stdin write reach
+// readline as two synchronous `line` events. Before Step 1 the async listener
+// interleaved at every await and both calls returned the same review.
+test('the MCP server serializes claims arriving in one write', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'xreview-mcp-race-'));
+  const storePath = path.join(dir, 'reviews.json');
+
+  try {
+    await createReview({ storePath, target: 'claude', source: 'codex', subject: 'race' });
+
+    const server = spawn(process.execPath, [SERVER], {
+      env: { ...process.env, CROSS_REVIEW_HOME: dir },
+      stdio: ['pipe', 'pipe', 'ignore']
+    });
+
+    try {
+      const payloads = await claimTwiceInOneWrite(server, storePath);
+      const winners = payloads.filter((payload) => payload !== null);
+      assert.equal(winners.length, 1, `expected 1 winner, got ${winners.length}`);
+    } finally {
+      server.kill();
+    }
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+function claimTwiceInOneWrite(server, storePath) {
+  const call = (id, reviewer) => ({
+    jsonrpc: '2.0',
+    id,
+    method: 'tools/call',
+    params: { name: 'claim_review', arguments: { storePath, target: 'claude', reviewer } }
+  });
+
+  return new Promise((resolve, reject) => {
+    const responses = [];
+    let buffer = '';
+    const timer = setTimeout(() => reject(new Error('timed out waiting for claim responses')), 5000);
+
+    server.stdout.on('data', (chunk) => {
+      buffer += chunk.toString('utf8');
+      let newline = buffer.indexOf('\n');
+      while (newline !== -1) {
+        const line = buffer.slice(0, newline).trim();
+        buffer = buffer.slice(newline + 1);
+        if (line) responses.push(JSON.parse(JSON.parse(line).result.content[0].text));
+        newline = buffer.indexOf('\n');
+      }
+      if (responses.length === 2) {
+        clearTimeout(timer);
+        resolve(responses);
+      }
+    });
+
+    // One write, so both requests land in the same chunk.
+    server.stdin.write(`${JSON.stringify(call(1, 'claude-code'))}\n${JSON.stringify(call(2, 'codex-cli'))}\n`);
+  });
+}
 
 // B1 (a): a single process — mcp-server.js handles JSON-RPC requests with
 // `rl.on('line', async ...)` and no serialization queue, so two claim requests

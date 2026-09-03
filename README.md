@@ -186,6 +186,18 @@ The actual review queue is stored separately in:
 
 That queue file is not automatically deleted, because it is the review history.
 
+## Review Rules
+
+The queue enforces a few rules so a review cannot be silently lost or overwritten:
+
+- A review must be claimed before it can be completed.
+- Only the reviewer that claimed it can complete it. Pass the same `--reviewer` to `claim` and `complete`.
+- A completed result is immutable. For another round, submit a new review instead of re-completing.
+- A completed review cannot be cancelled.
+- The review subject is capped at 120,000 characters. Oversized input is rejected rather than truncated, because a diff cut in half produces a review of code that does not exist.
+
+Review material is embedded in the reviewer prompt inside fenced blocks and labelled as untrusted, and the reviewer is told to treat it as data rather than instructions.
+
 ## Beginner Mental Model
 
 Think of Cross Review Bridge as a local inbox.

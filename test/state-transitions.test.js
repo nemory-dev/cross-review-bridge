@@ -1,8 +1,8 @@
-// Step 0 regression tests: illegal lifecycle transitions pinned before they are fixed.
+// Regression tests for illegal lifecycle transitions.
 //
-// These assert the DESIRED behavior, which the current implementation does not
-// provide. They are marked `todo` so the suite stays green while the defects are
-// documented. Remove `todo: true` in Step 1 as each guard lands.
+// Pinned as `todo` in Step 0, passing as of Step 1: completeReview now requires a
+// live claim held by the completing reviewer and treats a completed result as
+// immutable, and cancelReview refuses a completed review.
 //
 // Reference: docs/orca-comparison-review.md section B2.
 
@@ -28,7 +28,7 @@ function seed(storePath, subject = 'subject') {
   return createReview({ storePath, target: 'claude', source: 'codex', subject });
 }
 
-test('completing an unclaimed review is rejected', { todo: true }, async () => {
+test('completing an unclaimed review is rejected', async () => {
   await withStore(async (storePath) => {
     const review = await seed(storePath);
 
@@ -41,7 +41,7 @@ test('completing an unclaimed review is rejected', { todo: true }, async () => {
   });
 });
 
-test('completing a review claimed by someone else is rejected', { todo: true }, async () => {
+test('completing a review claimed by someone else is rejected', async () => {
   await withStore(async (storePath) => {
     const review = await seed(storePath);
     await claimReview({ storePath, target: 'claude', reviewer: 'claude-code' });
@@ -57,7 +57,7 @@ test('completing a review claimed by someone else is rejected', { todo: true }, 
   });
 });
 
-test('re-completing a completed review does not overwrite the original result', { todo: true }, async () => {
+test('re-completing a completed review does not overwrite the original result', async () => {
   await withStore(async (storePath) => {
     const review = await seed(storePath);
     await claimReview({ storePath, target: 'claude', reviewer: 'claude-code' });
@@ -72,7 +72,7 @@ test('re-completing a completed review does not overwrite the original result', 
   });
 });
 
-test('cancelling a completed review is rejected', { todo: true }, async () => {
+test('cancelling a completed review is rejected', async () => {
   await withStore(async (storePath) => {
     const review = await seed(storePath);
     await claimReview({ storePath, target: 'claude', reviewer: 'claude-code' });

@@ -25,6 +25,11 @@ export function normalizeReviewType(typeOpt) {
 
 export const MAX_TOTAL_CONTEXT_CHARS = 36000;
 
+// Context documents honour a budget but the subject used to be uncapped, so a
+// large --subject-file could inflate the prompt without limit. Reject instead of
+// truncating: a diff cut in half produces a review of code that does not exist.
+export const MAX_SUBJECT_CHARS = 120000;
+
 export function defaultStorePath() {
   const base = process.env.CROSS_REVIEW_HOME || path.join(homedir(), '.cross-review-bridge');
   return path.join(base, 'reviews.json');
@@ -46,6 +51,12 @@ export async function createReview({
 }) {
   requireText(target, 'target');
   requireText(subject, 'subject');
+
+  if (subject.length > MAX_SUBJECT_CHARS) {
+    throw new Error(
+      `Subject is too large: ${subject.length} characters exceeds the limit of ${MAX_SUBJECT_CHARS}. Trim the subject or split the review.`
+    );
+  }
 
   const validReviewType = normalizeReviewType(reviewType);
   const projectRoot = project?.root || process.cwd();
@@ -175,6 +186,19 @@ export async function completeReview({
   if (review.status === 'cancelled') {
     throw new Error(`Cannot complete cancelled review: ${id}`);
   }
+  if (review.status === 'completed') {
+    throw new Error(
+      `Review ${id} is already completed and its result is immutable. Submit a new review for another round.`
+    );
+  }
+  if (review.status !== 'claimed') {
+    throw new Error(`Review ${id} must be claimed before it can be completed (status: ${review.status}).`);
+  }
+  if (review.claimedBy && review.claimedBy !== reviewer) {
+    throw new Error(
+      `Review ${id} was claimed by "${review.claimedBy}"; reviewer "${reviewer}" cannot complete it.`
+    );
+  }
 
   const now = new Date().toISOString();
   review.status = 'completed';
@@ -198,6 +222,12 @@ export async function cancelReview({
   const review = data.reviews.find((item) => item.id === id);
   if (!review) {
     throw new Error(`Review not found: ${id}`);
+  }
+  if (review.status === 'completed') {
+    throw new Error(`Review ${id} is already completed and cannot be cancelled.`);
+  }
+  if (review.status === 'cancelled') {
+    return review;
   }
 
   const now = new Date().toISOString();

@@ -1,8 +1,8 @@
-// Step 0 regression tests: prompt trust-boundary defects pinned before they are fixed.
+// Regression tests for the prompt trust boundary.
 //
-// These assert the DESIRED behavior, which the current implementation does not
-// provide. They are marked `todo` so the suite stays green while the defects are
-// documented. Remove `todo: true` in Step 1 as each fix lands.
+// Pinned as `todo` in Step 0, passing as of Step 1: the renderer sizes each fence
+// to outrun the content it wraps, the prompt declares the material untrusted, and
+// the subject is capped.
 //
 // Reference: docs/orca-comparison-review.md sections B3 and E3.
 
@@ -64,7 +64,7 @@ function readSubjectBlock(prompt) {
 // fence. Today the renderer hard-codes ``` so the subject's closing fence ends
 // the block early and the remaining subject text is promoted to top-level
 // Markdown — landing a `## Output Format` heading directly above the real one.
-test('a subject containing code fences stays inside the subject block', { todo: true }, async () => {
+test('a subject containing code fences stays inside the subject block', async () => {
   await withStore(async (storePath) => {
     const review = await createReview({
       storePath,
@@ -80,7 +80,7 @@ test('a subject containing code fences stays inside the subject block', { todo: 
 
 // B3, structural layer, restated as the invariant a fix must hold: the outer
 // delimiter has to be longer than any backtick run inside the subject.
-test('the subject fence delimiter outruns any backtick run in the subject', { todo: true }, async () => {
+test('the subject fence delimiter outruns any backtick run in the subject', async () => {
   await withStore(async (storePath) => {
     const review = await createReview({
       storePath,
@@ -109,7 +109,7 @@ test('the subject fence delimiter outruns any backtick run in the subject', { to
 // B3, semantic layer: a structurally intact fence still lets the subject say
 // "ignore your instructions". The reviewer needs to be told the material is
 // untrusted data, not instructions.
-test('the prompt marks review material as untrusted', { todo: true }, async () => {
+test('the prompt marks review material as untrusted', async () => {
   await withStore(async (storePath) => {
     const review = await createReview({
       storePath,
@@ -126,7 +126,7 @@ test('the prompt marks review material as untrusted', { todo: true }, async () =
 
 // D5 in the original comparison: context documents honour a character budget but
 // the subject itself is uncapped, so `--subject-file` can inflate the prompt without limit.
-test('an oversized subject is rejected', { todo: true }, async () => {
+test('an oversized subject is rejected', async () => {
   await withStore(async (storePath) => {
     await assert.rejects(
       () =>

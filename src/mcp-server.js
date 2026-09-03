@@ -122,7 +122,16 @@ const rl = readline.createInterface({
   crlfDelay: Number.POSITIVE_INFINITY
 });
 
-rl.on('line', async (line) => {
+// Requests are handled one at a time. readline emits `line` synchronously, so an
+// async listener would interleave at every await: two claim_review calls arriving
+// together would both read the same pending review and both report a win.
+let pending = Promise.resolve();
+
+rl.on('line', (line) => {
+  pending = pending.then(() => handleLine(line)).catch(() => {});
+});
+
+async function handleLine(line) {
   if (!line.trim()) return;
 
   let request;
@@ -143,7 +152,7 @@ rl.on('line', async (line) => {
       }
     });
   }
-});
+}
 
 async function handleRequest(method, params) {
   switch (method) {
