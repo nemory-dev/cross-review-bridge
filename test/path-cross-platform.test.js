@@ -17,7 +17,7 @@ test('toPosixPath converts Windows backslashes to POSIX forward slashes', () => 
 
 test('createReview normalizes proposedPlanFile and contextDocuments paths regardless of OS input', async () => {
   const dir = await mkdtemp(path.join(tmpdir(), 'xreview-path-test-'));
-  const storePath = path.join(dir, 'reviews.json');
+  const storePath = path.join(dir, 'reviews.db');
 
   try {
     const review = await createReview({

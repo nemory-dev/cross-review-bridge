@@ -9,7 +9,7 @@ const SERVER = path.resolve('src/mcp-server.js');
 
 test('MCP server lists tools and submits a review', async () => {
   const dir = await mkdtemp(path.join(tmpdir(), 'xreview-mcp-'));
-  const storePath = path.join(dir, 'reviews.json');
+  const storePath = path.join(dir, 'reviews.db');
 
   try {
     const server = spawn(process.execPath, [SERVER], {

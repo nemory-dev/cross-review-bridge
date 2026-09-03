@@ -22,7 +22,7 @@ Review requests may contain:
 Do not commit or share the review store:
 
 ```text
-~/.cross-review-bridge/reviews.json
+~/.cross-review-bridge/reviews.db
 ```
 
 ## Project Context Bounds

@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto';
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
+import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import path from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 
 import { readContextDocument, toPosixPath } from './context.js';
 
@@ -32,7 +33,114 @@ export const MAX_SUBJECT_CHARS = 120000;
 
 export function defaultStorePath() {
   const base = process.env.CROSS_REVIEW_HOME || path.join(homedir(), '.cross-review-bridge');
-  return path.join(base, 'reviews.json');
+  return path.join(base, 'reviews.db');
+}
+
+// The store is SQLite rather than a JSON file because several hosts share it:
+// a Codex MCP server, a Claude MCP server, and the xreview CLI are separate
+// processes writing the same path. A read-modify-write over JSON loses updates
+// between them, and on Windows concurrent renames onto one destination fail
+// outright. See docs/orca-comparison-review.md sections B1, C1, and D4.
+function openStore(storePath) {
+  mkdirSync(path.dirname(storePath), { recursive: true });
+
+  const db = new DatabaseSync(storePath);
+  db.exec('PRAGMA journal_mode = WAL');
+  db.exec('PRAGMA synchronous = NORMAL');
+  // Concurrent writers wait for the lock instead of failing with SQLITE_BUSY.
+  db.exec('PRAGMA busy_timeout = 5000');
+
+  const isNew = !db
+    .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'reviews'")
+    .get();
+
+  db.exec(`CREATE TABLE IF NOT EXISTS reviews (
+    id         TEXT PRIMARY KEY,
+    status     TEXT NOT NULL,
+    target     TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    claimed_by TEXT,
+    data       TEXT NOT NULL
+  )`);
+  db.exec('CREATE INDEX IF NOT EXISTS reviews_by_queue ON reviews (target, status, created_at)');
+
+  if (isNew) {
+    importLegacyJsonStore(db, storePath);
+  }
+
+  return db;
+}
+
+// One-time carry-over from the pre-SQLite layout. The JSON file is left in place
+// rather than deleted, so a mistaken migration stays recoverable.
+function importLegacyJsonStore(db, storePath) {
+  const legacyPath = path.join(path.dirname(storePath), 'reviews.json');
+  if (!existsSync(legacyPath)) return;
+
+  let reviews;
+  try {
+    reviews = JSON.parse(readFileSync(legacyPath, 'utf8')).reviews;
+  } catch {
+    return;
+  }
+  if (!Array.isArray(reviews)) return;
+
+  const insert = db.prepare(
+    'INSERT OR IGNORE INTO reviews (id, status, target, created_at, claimed_by, data) VALUES (?, ?, ?, ?, ?, ?)'
+  );
+  transact(db, () => {
+    for (const review of reviews) {
+      if (!review?.id) continue;
+      insert.run(
+        review.id,
+        review.status ?? 'pending',
+        review.target ?? '',
+        review.createdAt ?? new Date(0).toISOString(),
+        review.claimedBy ?? null,
+        JSON.stringify(review)
+      );
+    }
+  });
+}
+
+function withStore(storePath, run) {
+  const db = openStore(storePath);
+  try {
+    return run(db);
+  } finally {
+    db.close();
+  }
+}
+
+// BEGIN IMMEDIATE takes the write lock up front, so a select-then-update pair
+// cannot interleave with another writer's.
+function transact(db, run) {
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    const result = run();
+    db.exec('COMMIT');
+    return result;
+  } catch (error) {
+    try {
+      db.exec('ROLLBACK');
+    } catch {
+      // The transaction is already gone; surface the original failure.
+    }
+    throw error;
+  }
+}
+
+function persist(db, review) {
+  db.prepare(
+    `INSERT INTO reviews (id, status, target, created_at, claimed_by, data)
+     VALUES (?, ?, ?, ?, ?, ?)
+     ON CONFLICT(id) DO UPDATE SET status = excluded.status, claimed_by = excluded.claimed_by, data = excluded.data`
+  ).run(review.id, review.status, review.target, review.createdAt, review.claimedBy ?? null, JSON.stringify(review));
+}
+
+function loadReview(db, id) {
+  const row = db.prepare('SELECT data FROM reviews WHERE id = ?').get(id);
+  return row ? JSON.parse(row.data) : null;
 }
 
 export async function createReview({
@@ -115,9 +223,7 @@ export async function createReview({
     updatedAt: now
   };
 
-  const data = await readStore(storePath);
-  data.reviews.push(review);
-  await writeStore(storePath, data);
+  withStore(storePath, (db) => persist(db, review));
   return review;
 }
 
@@ -130,18 +236,29 @@ export async function listReviews({
     throw new Error(`Invalid review status: ${status}`);
   }
 
-  const data = await readStore(storePath);
-  return data.reviews.filter((review) => {
-    if (status && review.status !== status) return false;
-    if (target && review.target !== target) return false;
-    return true;
-  });
+  const filters = [];
+  const values = [];
+  if (status) {
+    filters.push('status = ?');
+    values.push(status);
+  }
+  if (target) {
+    filters.push('target = ?');
+    values.push(target);
+  }
+  const where = filters.length > 0 ? ` WHERE ${filters.join(' AND ')}` : '';
+
+  return withStore(storePath, (db) =>
+    db
+      .prepare(`SELECT data FROM reviews${where} ORDER BY created_at, id`)
+      .all(...values)
+      .map((row) => JSON.parse(row.data))
+  );
 }
 
 export async function getReview({ storePath = defaultStorePath(), id }) {
   requireText(id, 'id');
-  const data = await readStore(storePath);
-  const review = data.reviews.find((item) => item.id === id);
+  const review = withStore(storePath, (db) => loadReview(db, id));
   if (!review) {
     throw new Error(`Review not found: ${id}`);
   }
@@ -154,19 +271,28 @@ export async function claimReview({
   reviewer = 'unknown'
 }) {
   requireText(target, 'target');
-  const data = await readStore(storePath);
-  const review = data.reviews.find((item) => item.status === 'pending' && item.target === target);
 
-  if (!review) {
-    return null;
-  }
+  return withStore(storePath, (db) =>
+    transact(db, () => {
+      const row = db
+        .prepare(
+          "SELECT data FROM reviews WHERE target = ? AND status = 'pending' ORDER BY created_at, id LIMIT 1"
+        )
+        .get(target);
 
-  review.status = 'claimed';
-  review.claimedBy = reviewer;
-  review.claimedAt = new Date().toISOString();
-  review.updatedAt = review.claimedAt;
-  await writeStore(storePath, data);
-  return review;
+      if (!row) {
+        return null;
+      }
+
+      const review = JSON.parse(row.data);
+      review.status = 'claimed';
+      review.claimedBy = reviewer;
+      review.claimedAt = new Date().toISOString();
+      review.updatedAt = review.claimedAt;
+      persist(db, review);
+      return review;
+    })
+  );
 }
 
 export async function completeReview({
@@ -178,38 +304,41 @@ export async function completeReview({
   requireText(id, 'id');
   requireText(result, 'result');
 
-  const data = await readStore(storePath);
-  const review = data.reviews.find((item) => item.id === id);
-  if (!review) {
-    throw new Error(`Review not found: ${id}`);
-  }
-  if (review.status === 'cancelled') {
-    throw new Error(`Cannot complete cancelled review: ${id}`);
-  }
-  if (review.status === 'completed') {
-    throw new Error(
-      `Review ${id} is already completed and its result is immutable. Submit a new review for another round.`
-    );
-  }
-  if (review.status !== 'claimed') {
-    throw new Error(`Review ${id} must be claimed before it can be completed (status: ${review.status}).`);
-  }
-  if (review.claimedBy && review.claimedBy !== reviewer) {
-    throw new Error(
-      `Review ${id} was claimed by "${review.claimedBy}"; reviewer "${reviewer}" cannot complete it.`
-    );
-  }
+  return withStore(storePath, (db) =>
+    transact(db, () => {
+      const review = loadReview(db, id);
+      if (!review) {
+        throw new Error(`Review not found: ${id}`);
+      }
+      if (review.status === 'cancelled') {
+        throw new Error(`Cannot complete cancelled review: ${id}`);
+      }
+      if (review.status === 'completed') {
+        throw new Error(
+          `Review ${id} is already completed and its result is immutable. Submit a new review for another round.`
+        );
+      }
+      if (review.status !== 'claimed') {
+        throw new Error(`Review ${id} must be claimed before it can be completed (status: ${review.status}).`);
+      }
+      if (review.claimedBy && review.claimedBy !== reviewer) {
+        throw new Error(
+          `Review ${id} was claimed by "${review.claimedBy}"; reviewer "${reviewer}" cannot complete it.`
+        );
+      }
 
-  const now = new Date().toISOString();
-  review.status = 'completed';
-  review.result = {
-    reviewer,
-    body: result,
-    completedAt: now
-  };
-  review.updatedAt = now;
-  await writeStore(storePath, data);
-  return review;
+      const now = new Date().toISOString();
+      review.status = 'completed';
+      review.result = {
+        reviewer,
+        body: result,
+        completedAt: now
+      };
+      review.updatedAt = now;
+      persist(db, review);
+      return review;
+    })
+  );
 }
 
 export async function cancelReview({
@@ -218,47 +347,27 @@ export async function cancelReview({
   reason = ''
 }) {
   requireText(id, 'id');
-  const data = await readStore(storePath);
-  const review = data.reviews.find((item) => item.id === id);
-  if (!review) {
-    throw new Error(`Review not found: ${id}`);
-  }
-  if (review.status === 'completed') {
-    throw new Error(`Review ${id} is already completed and cannot be cancelled.`);
-  }
-  if (review.status === 'cancelled') {
-    return review;
-  }
 
-  const now = new Date().toISOString();
-  review.status = 'cancelled';
-  review.cancelReason = reason;
-  review.updatedAt = now;
-  await writeStore(storePath, data);
-  return review;
-}
+  return withStore(storePath, (db) =>
+    transact(db, () => {
+      const review = loadReview(db, id);
+      if (!review) {
+        throw new Error(`Review not found: ${id}`);
+      }
+      if (review.status === 'completed') {
+        throw new Error(`Review ${id} is already completed and cannot be cancelled.`);
+      }
+      if (review.status === 'cancelled') {
+        return review;
+      }
 
-async function readStore(storePath) {
-  try {
-    const raw = await readFile(storePath, 'utf8');
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed.reviews)) {
-      return { reviews: [] };
-    }
-    return parsed;
-  } catch (error) {
-    if (error.code === 'ENOENT') {
-      return { reviews: [] };
-    }
-    throw error;
-  }
-}
-
-async function writeStore(storePath, data) {
-  await mkdir(path.dirname(storePath), { recursive: true });
-  const tempPath = `${storePath}.${process.pid}.${Date.now()}.tmp`;
-  await writeFile(tempPath, `${JSON.stringify(data, null, 2)}\n`, 'utf8');
-  await rename(tempPath, storePath);
+      review.status = 'cancelled';
+      review.cancelReason = reason;
+      review.updatedAt = new Date().toISOString();
+      persist(db, review);
+      return review;
+    })
+  );
 }
 
 function requireText(value, field) {

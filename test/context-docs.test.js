@@ -69,7 +69,7 @@ test('readContextDocument rejects symlinks targeting files outside project root'
 
 test('createReview respects total context size budget MAX_TOTAL_CONTEXT_CHARS', async () => {
   const rootDir = await mkdtemp(path.join(tmpdir(), 'xreview-budget-root-'));
-  const storePath = path.join(rootDir, 'reviews.json');
+  const storePath = path.join(rootDir, 'reviews.db');
   const hugePlan = path.join(rootDir, 'huge_plan.md');
   const doc2 = path.join(rootDir, 'doc2.md');
   const doc3 = path.join(rootDir, 'doc3.md');
@@ -107,7 +107,7 @@ test('createReview respects total context size budget MAX_TOTAL_CONTEXT_CHARS', 
 
 test('createReview captures document contents and renderReviewPrompt embeds markdown codeblocks', async () => {
   const rootDir = await mkdtemp(path.join(tmpdir(), 'xreview-full-root-'));
-  const storePath = path.join(rootDir, 'reviews.json');
+  const storePath = path.join(rootDir, 'reviews.db');
   const planPath = path.join(rootDir, 'plan.md');
   const adrPath = path.join(rootDir, 'adr.md');
 
@@ -140,7 +140,7 @@ test('createReview captures document contents and renderReviewPrompt embeds mark
 
 test('CLI --type code applies CODE_DIFF default prompt correctly', async () => {
   const dir = await mkdtemp(path.join(tmpdir(), 'xreview-cli-test-'));
-  const storePath = path.join(dir, 'reviews.json');
+  const storePath = path.join(dir, 'reviews.db');
 
   try {
     const cliPath = path.resolve('src/cli.js');
@@ -169,7 +169,7 @@ test('CLI --type code applies CODE_DIFF default prompt correctly', async () => {
 
 test('CLI throws error on invalid --type', async () => {
   const dir = await mkdtemp(path.join(tmpdir(), 'xreview-cli-test-'));
-  const storePath = path.join(dir, 'reviews.json');
+  const storePath = path.join(dir, 'reviews.db');
 
   try {
     const cliPath = path.resolve('src/cli.js');

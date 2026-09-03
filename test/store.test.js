@@ -15,7 +15,7 @@ import {
 
 test('review lifecycle moves from pending to claimed to completed', async () => {
   const dir = await mkdtemp(path.join(tmpdir(), 'xreview-store-'));
-  const storePath = path.join(dir, 'reviews.json');
+  const storePath = path.join(dir, 'reviews.db');
 
   try {
     const created = await createReview({
@@ -68,7 +68,7 @@ test('review lifecycle moves from pending to claimed to completed', async () => 
 
 test('cancelReview records a cancelled review with a reason', async () => {
   const dir = await mkdtemp(path.join(tmpdir(), 'xreview-store-'));
-  const storePath = path.join(dir, 'reviews.json');
+  const storePath = path.join(dir, 'reviews.db');
 
   try {
     const created = await createReview({

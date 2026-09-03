@@ -31,7 +31,7 @@ const FENCED_SUBJECT = [
 
 async function withStore(run) {
   const dir = await mkdtemp(path.join(tmpdir(), 'xreview-prompt-'));
-  const storePath = path.join(dir, 'reviews.json');
+  const storePath = path.join(dir, 'reviews.db');
   try {
     return await run(storePath);
   } finally {

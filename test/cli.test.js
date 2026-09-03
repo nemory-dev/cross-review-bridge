@@ -9,7 +9,7 @@ const CLI = path.resolve('src/cli.js');
 
 test('CLI submits and claims a review request', async () => {
   const dir = await mkdtemp(path.join(tmpdir(), 'xreview-cli-'));
-  const storePath = path.join(dir, 'reviews.json');
+  const storePath = path.join(dir, 'reviews.db');
   const subjectPath = path.join(dir, 'answer.md');
 
   try {
@@ -59,7 +59,7 @@ test('CLI submits and claims a review request', async () => {
 
 test('CLI submit accepts positional subject and defaults codex reviews to claude', async () => {
   const dir = await mkdtemp(path.join(tmpdir(), 'xreview-cli-'));
-  const storePath = path.join(dir, 'reviews.json');
+  const storePath = path.join(dir, 'reviews.db');
 
   try {
     const submit = runCli([
@@ -81,7 +81,7 @@ test('CLI submit accepts positional subject and defaults codex reviews to claude
 
 test('CLI submit defaults claude reviews to codex when source is claude', async () => {
   const dir = await mkdtemp(path.join(tmpdir(), 'xreview-cli-'));
-  const storePath = path.join(dir, 'reviews.json');
+  const storePath = path.join(dir, 'reviews.db');
 
   try {
     const submit = runCli([
@@ -105,7 +105,7 @@ test('CLI submit defaults claude reviews to codex when source is claude', async 
 
 test('CLI review alias submits with review defaults', async () => {
   const dir = await mkdtemp(path.join(tmpdir(), 'xreview-cli-'));
-  const storePath = path.join(dir, 'reviews.json');
+  const storePath = path.join(dir, 'reviews.db');
 
   try {
     const submit = runCli([

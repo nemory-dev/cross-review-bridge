@@ -16,7 +16,7 @@ import { cancelReview, claimReview, completeReview, createReview, getReview } fr
 
 async function withStore(run) {
   const dir = await mkdtemp(path.join(tmpdir(), 'xreview-transition-'));
-  const storePath = path.join(dir, 'reviews.json');
+  const storePath = path.join(dir, 'reviews.db');
   try {
     return await run(storePath);
   } finally {

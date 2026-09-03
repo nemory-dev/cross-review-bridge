@@ -9,7 +9,7 @@ import { createReview, getReview } from '../src/store.js';
 
 test('createReview and renderReviewPrompt handle PLAN_AND_PROPOSAL review type', async () => {
   const dir = await mkdtemp(path.join(tmpdir(), 'xreview-test-'));
-  const storePath = path.join(dir, 'reviews.json');
+  const storePath = path.join(dir, 'reviews.db');
 
   try {
     const review = await createReview({
@@ -50,7 +50,7 @@ test('createReview and renderReviewPrompt handle PLAN_AND_PROPOSAL review type',
 
 test('createReview and renderReviewPrompt handle CODE_DIFF review type', async () => {
   const dir = await mkdtemp(path.join(tmpdir(), 'xreview-test-'));
-  const storePath = path.join(dir, 'reviews.json');
+  const storePath = path.join(dir, 'reviews.db');
 
   try {
     const review = await createReview({
@@ -72,7 +72,7 @@ test('createReview and renderReviewPrompt handle CODE_DIFF review type', async (
 
 test('createReview throws Error on invalid reviewType', async () => {
   const dir = await mkdtemp(path.join(tmpdir(), 'xreview-test-'));
-  const storePath = path.join(dir, 'reviews.json');
+  const storePath = path.join(dir, 'reviews.db');
 
   try {
     await assert.rejects(

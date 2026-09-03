@@ -44,7 +44,7 @@ Codex가 같은 리뷰함에서 피드백 확인
 
 ## 설치
 
-Node.js 20 이상이 필요합니다.
+내장 `node:sqlite` 모듈을 사용하므로 Node.js 24 이상이 필요합니다. 런타임 의존성은 여전히 0개입니다.
 
 ```bash
 git clone <your-repo-url> cross-review-bridge
@@ -189,7 +189,7 @@ rm answer.md feedback.md
 단, 실제 리뷰 기록은 별도 파일에 저장됩니다.
 
 ```text
-~/.cross-review-bridge/reviews.json
+~/.cross-review-bridge/reviews.db
 ```
 
 이 파일은 리뷰 히스토리이므로 자동 삭제되지 않습니다.
@@ -233,11 +233,15 @@ xreview submit \
 
 ## 저장 위치
 
-기본 리뷰 저장 위치는 다음과 같습니다.
+리뷰는 SQLite 데이터베이스에 저장됩니다.
 
 ```text
-~/.cross-review-bridge/reviews.json
+~/.cross-review-bridge/reviews.db
 ```
+
+여러 호스트가 이 파일을 함께 쓰기 때문입니다. Codex MCP 서버, Claude MCP 서버, CLI는 서로 다른 프로세스이며 같은 저장소에 씁니다. 모든 쓰기는 `BEGIN IMMEDIATE` 트랜잭션 안에서 이뤄지므로 두 리뷰어가 같은 리뷰를 가져가는 일이 없고, 경합하는 프로세스는 실패하는 대신 잠금을 기다립니다.
+
+이전 버전을 쓰셨다면 첫 실행 시 같은 폴더의 `reviews.json`을 데이터베이스로 자동 이관합니다. JSON 파일은 지우지 않고 그대로 두므로 되돌릴 수 있습니다.
 
 다른 위치를 쓰고 싶으면 환경 변수를 설정합니다.
 
@@ -248,7 +252,7 @@ export CROSS_REVIEW_HOME=/path/to/review-state
 명령마다 저장 파일을 직접 지정할 수도 있습니다.
 
 ```bash
-xreview pending --store /tmp/reviews.json
+xreview pending --store /tmp/reviews.db
 ```
 
 ## 자주 쓰는 명령
@@ -361,7 +365,7 @@ xreview show <review-id>
 - 고객 정보
 - 비공개 프로젝트 지침
 
-`~/.cross-review-bridge/reviews.json` 파일은 리뷰 기록입니다. 민감한 내용이 들어갈 수 있으므로 공개 저장소에 올리거나 다른 사람에게 공유하지 마세요.
+`~/.cross-review-bridge/reviews.db` 파일은 리뷰 기록입니다. 민감한 내용이 들어갈 수 있으므로 공개 저장소에 올리거나 다른 사람에게 공유하지 마세요.
 
 자세한 내용은 [docs/security.md](docs/security.md)를 참고하세요.
 

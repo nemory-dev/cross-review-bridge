@@ -1,9 +1,10 @@
-// Regression tests for concurrency defects.
+// Regression tests for concurrency defects, all passing as of Step 3.
 //
-// The MCP serialization test passes as of Step 1. The remaining three assert the
-// DESIRED behavior of the store itself, which needs cross-process atomicity the
-// JSON backend cannot provide; they stay `todo` until the node:sqlite migration
-// in Step 3 and are the acceptance criteria for it.
+// Request-level interleaving was fixed in Step 1 by serializing MCP requests.
+// Store-level races needed cross-process atomicity the JSON backend could not
+// provide and were closed by the node:sqlite migration: writes go through
+// BEGIN IMMEDIATE, so a select-then-update pair cannot interleave with another
+// writer's, and busy_timeout makes competing processes wait rather than fail.
 //
 // Reference: docs/orca-comparison-review.md sections B1, C1, and D4.
 
@@ -25,7 +26,7 @@ const SERVER = path.resolve('src/mcp-server.js');
 // interleaved at every await and both calls returned the same review.
 test('the MCP server serializes claims arriving in one write', async () => {
   const dir = await mkdtemp(path.join(tmpdir(), 'xreview-mcp-race-'));
-  const storePath = path.join(dir, 'reviews.json');
+  const storePath = path.join(dir, 'reviews.db');
 
   try {
     await createReview({ storePath, target: 'claude', source: 'codex', subject: 'race' });
@@ -83,9 +84,9 @@ function claimTwiceInOneWrite(server, storePath) {
 // B1 (a): a single process — mcp-server.js handles JSON-RPC requests with
 // `rl.on('line', async ...)` and no serialization queue, so two claim requests
 // interleave at every await point.
-test('two concurrent claims in one process yield exactly one winner', { todo: true }, async () => {
+test('two concurrent claims in one process yield exactly one winner', async () => {
   const dir = await mkdtemp(path.join(tmpdir(), 'xreview-conc-'));
-  const storePath = path.join(dir, 'reviews.json');
+  const storePath = path.join(dir, 'reviews.db');
 
   try {
     await createReview({ storePath, target: 'claude', source: 'codex', subject: 'race' });
@@ -105,9 +106,9 @@ test('two concurrent claims in one process yield exactly one winner', { todo: tr
 // C1: `writeStore` builds its temp path from pid + milliseconds, so two writes
 // in the same process and millisecond collide. One rename consumes the other's
 // temp file and the loser throws ENOENT.
-test('concurrent submits in one process all persist', { todo: true }, async () => {
+test('concurrent submits in one process all persist', async () => {
   const dir = await mkdtemp(path.join(tmpdir(), 'xreview-conc-'));
-  const storePath = path.join(dir, 'reviews.json');
+  const storePath = path.join(dir, 'reviews.db');
 
   try {
     const submissions = Array.from({ length: 8 }, (_, index) =>
@@ -133,9 +134,9 @@ test('concurrent submits in one process all persist', { todo: true }, async () =
 // Measured on Windows 11 / Node 24: 12 workers produced 5 successful claims and
 // 7 EPERM crashes. Distinct pids mean no temp-name collision, so a unique temp
 // name alone does not fix this — see docs/orca-comparison-review.md C1.
-test('barrier-aligned claims across processes yield exactly one winner', { todo: true }, async () => {
+test('barrier-aligned claims across processes yield exactly one winner', async () => {
   const dir = await mkdtemp(path.join(tmpdir(), 'xreview-barrier-'));
-  const storePath = path.join(dir, 'reviews.json');
+  const storePath = path.join(dir, 'reviews.db');
   const workerPath = path.join(dir, 'worker.mjs');
   const workerCount = 12;
 

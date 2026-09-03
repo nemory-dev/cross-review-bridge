@@ -27,7 +27,7 @@ By default, it uses local files only. Any model usage happens inside the app or 
 
 ## Install
 
-Requires Node.js 20 or newer.
+Requires Node.js 24 or newer, for the built-in `node:sqlite` module. The project still has zero runtime dependencies.
 
 ```bash
 git clone <your-repo-url> cross-review-bridge
@@ -181,7 +181,7 @@ rm answer.md feedback.md
 The actual review queue is stored separately in:
 
 ```text
-~/.cross-review-bridge/reviews.json
+~/.cross-review-bridge/reviews.db
 ```
 
 That queue file is not automatically deleted, because it is the review history.
@@ -263,11 +263,15 @@ xreview submit --cwd /path/to/project --source codex --subject-file answer.md
 
 ## Storage
 
-Default store:
+Reviews live in a SQLite database:
 
 ```text
-~/.cross-review-bridge/reviews.json
+~/.cross-review-bridge/reviews.db
 ```
+
+SQLite is used because several hosts share this file: a Codex MCP server, a Claude MCP server, and the CLI are separate processes writing the same store. Writes run inside a `BEGIN IMMEDIATE` transaction, so two reviewers cannot claim the same review, and a competing process waits for the lock instead of failing.
+
+If you used an earlier version, the first run imports `reviews.json` from the same directory into the database. The JSON file is left in place, so nothing is lost if you want to go back.
 
 Override it with:
 
@@ -278,7 +282,7 @@ export CROSS_REVIEW_HOME=/path/to/review-state
 Or per command:
 
 ```bash
-xreview pending --store /tmp/reviews.json
+xreview pending --store /tmp/reviews.db
 ```
 
 ## Suggested Workflow
@@ -313,7 +317,7 @@ Be careful with:
 - Secrets accidentally included in an answer.
 - Proprietary project instructions.
 - Sensitive data in review subjects.
-- Sharing `~/.cross-review-bridge/reviews.json`.
+- Sharing `~/.cross-review-bridge/reviews.db`.
 
 See [docs/security.md](docs/security.md).
 

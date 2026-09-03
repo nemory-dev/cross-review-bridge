@@ -31,7 +31,17 @@ Source host
 - `completed`
 - `cancelled`
 
-The store is a local JSON file with atomic writes.
+The store is a local SQLite database (`node:sqlite`, WAL journal). Several hosts
+share it as separate processes, so every mutation runs inside a `BEGIN IMMEDIATE`
+transaction: a select-then-update pair cannot interleave with another writer's, and
+`busy_timeout` makes a competing process wait rather than fail.
+
+Lifecycle transitions are enforced rather than advisory. A review must be claimed
+before completion, only the claiming reviewer may complete it, and completed or
+cancelled reviews are terminal.
+
+A pre-existing `reviews.json` in the same directory is imported once on first open
+and then left in place.
 
 ### Context Collector
 
